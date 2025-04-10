@@ -1,11 +1,11 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import pins
-from esphome.components import uart, sensor, button, number
+from esphome.components import uart, sensor, button, number, binary_sensor
 from esphome.const import CONF_ID, CONF_HEIGHT, CONF_UNIT_OF_MEASUREMENT, CONF_ACCURACY_DECIMALS, UNIT_CENTIMETER, UNIT_PERCENT
 
-DEPENDENCIES = ['uart']
-AUTO_LOAD = ['sensor', 'button', 'number']
+DEPENDENCIES = ['uart', 'binary_sensor']
+AUTO_LOAD = ['sensor', 'button', 'number', 'binary_sensor']
 
 jiecang_desk_controller_ns = cg.esphome_ns.namespace('jiecang_desk_controller')
 
@@ -31,7 +31,13 @@ CONF_POSITION4 = "position4"
 CONF_SAVE_POSITION = "save_position"
 CONF_MOVE_UP = "move_up"
 CONF_MOVE_DOWN = "move_down"
-
+CONF_CUSTOM_LIMIT_MIN = "custom_limit_min"
+CONF_CUSTOM_LIMIT_MAX = "custom_limit_max"
+CONF_PHYSICAL_LIMIT_MIN = "physical_limit_min"
+CONF_PHYSICAL_LIMIT_MAX = "physical_limit_max"
+CONF_LIMIT_MIN = "limit_min"
+CONF_LIMIT_MAX = "limit_max"
+CONF_HAS_CUSTOM_LIMIT = "has_custom_limit"
 
 button_constants = {}
 button_constants[CONF_STEP_UP] = 0
@@ -51,10 +57,16 @@ CONF_LOWER = "lower"
 button_constants[CONF_RAISE] = button_constants[CONF_STEP_UP]
 button_constants[CONF_LOWER] = button_constants[CONF_STEP_DOWN]
 
-
 number_constants = {}
 number_constants[CONF_HEIGHT] = 0
 number_constants[CONF_HEIGHT_PCT] = 1
+number_constants[CONF_PHYSICAL_LIMIT_MIN] = 2
+number_constants[CONF_PHYSICAL_LIMIT_MAX] = 3
+number_constants[CONF_CUSTOM_LIMIT_MIN] = 4
+number_constants[CONF_CUSTOM_LIMIT_MAX] = 5
+number_constants[CONF_LIMIT_MIN] = 6
+number_constants[CONF_LIMIT_MAX] = 7
+number_constants[CONF_HAS_CUSTOM_LIMIT] = 8
 
 CONFIG_SCHEMA = cv.COMPONENT_SCHEMA.extend({
     cv.GenerateID(): cv.declare_id(JiecangDeskController),
@@ -94,7 +106,32 @@ CONFIG_SCHEMA = cv.COMPONENT_SCHEMA.extend({
             accuracy_decimals = 1,
             unit_of_measurement = UNIT_CENTIMETER
         ),
+        cv.Optional(CONF_PHYSICAL_LIMIT_MIN): sensor.sensor_schema(
+            accuracy_decimals = 1,
+            unit_of_measurement = UNIT_CENTIMETER
+        ),
+        cv.Optional(CONF_PHYSICAL_LIMIT_MAX): sensor.sensor_schema(
+            accuracy_decimals = 1,
+            unit_of_measurement = UNIT_CENTIMETER
+        ),
+        cv.Optional(CONF_CUSTOM_LIMIT_MIN): sensor.sensor_schema(
+            accuracy_decimals = 1,
+            unit_of_measurement = UNIT_CENTIMETER
+        ),
+        cv.Optional(CONF_CUSTOM_LIMIT_MAX): sensor.sensor_schema(
+            accuracy_decimals = 1,
+            unit_of_measurement = UNIT_CENTIMETER
+        ),
+        cv.Optional(CONF_LIMIT_MIN): sensor.sensor_schema(
+            accuracy_decimals = 1,
+            unit_of_measurement = UNIT_CENTIMETER
+        ),
+        cv.Optional(CONF_LIMIT_MAX): sensor.sensor_schema(
+            accuracy_decimals = 1,
+            unit_of_measurement = UNIT_CENTIMETER
+        ),
     }),
+    cv.Optional(CONF_HAS_CUSTOM_LIMIT): binary_sensor.binary_sensor_schema(),
     cv.Optional(CONF_NUMBERS): cv.Schema({
         cv.Optional(CONF_HEIGHT): number.NUMBER_SCHEMA.extend({
             cv.GenerateID(): cv.declare_id(JiecangDeskNumber),
@@ -159,6 +196,28 @@ async def to_code(config):
         if CONF_POSITION4 in sensors:
             sens = await sensor.new_sensor(sensors[CONF_POSITION4])
             cg.add(var.set_sensor_position4(sens))
+        if CONF_CUSTOM_LIMIT_MIN in sensors:
+            sens = await sensor.new_sensor(sensors[CONF_CUSTOM_LIMIT_MIN])
+            cg.add(var.set_sensor_custom_limit_min(sens))
+        if CONF_CUSTOM_LIMIT_MAX in sensors:
+            sens = await sensor.new_sensor(sensors[CONF_CUSTOM_LIMIT_MAX])
+            cg.add(var.set_sensor_custom_limit_max(sens))
+        if CONF_PHYSICAL_LIMIT_MIN in sensors:
+            sens = await sensor.new_sensor(sensors[CONF_PHYSICAL_LIMIT_MIN])
+            cg.add(var.set_sensor_physical_limit_min(sens))
+        if CONF_PHYSICAL_LIMIT_MAX in sensors:
+            sens = await sensor.new_sensor(sensors[CONF_PHYSICAL_LIMIT_MAX])
+            cg.add(var.set_sensor_physical_limit_max(sens))
+        if CONF_LIMIT_MIN in sensors:
+            sens = await sensor.new_sensor(sensors[CONF_LIMIT_MIN])
+            cg.add(var.set_sensor_limit_min(sens))
+        if CONF_LIMIT_MAX in sensors:
+            sens = await sensor.new_sensor(sensors[CONF_LIMIT_MAX])
+            cg.add(var.set_sensor_limit_max(sens))
+
+    if CONF_HAS_CUSTOM_LIMIT in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_HAS_CUSTOM_LIMIT])
+        cg.add(var.set_sensor_has_custom_limit(bs))
 
     if CONF_BUTTONS in config:
         buttons = config[CONF_BUTTONS]

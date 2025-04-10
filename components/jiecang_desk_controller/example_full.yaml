@@ -7,11 +7,11 @@ esphome:
     # You can skip this if you don't use those.
     priority: 0 # when mostly everything else is done
     then:
-      - lambda: "id(my_desk).request_physical_limits();"
-      - delay: 0.1s # give controller a chance to handle the response before sending the next command
-      - lambda: "id(my_desk).request_limits();"
-      - delay: 0.1s
-      - lambda: "id(my_desk).request_settings();"
+      - lambda: 'ESP_LOGI("desk", "Requesting physical limits..."); id(my_desk).request_physical_limits();'
+      - delay: .5s
+      - lambda: 'ESP_LOGI("desk", "Requesting limit flags..."); id(my_desk).request_limits();'
+      - delay: .5s
+      - lambda: 'ESP_LOGI("desk", "Requesting settings..."); id(my_desk).request_settings();'
 
 external_components:
   - source:
@@ -31,14 +31,16 @@ logger:
   baud_rate: 0 # disable logging over uart, required when using the RX/TX pins for the controller
 
 jiecang_desk_controller:
-  id: my_desk
+  id: my_desk  
+  has_custom_limit:
+    name: "Custom Height Limit Active"
   sensors:
     height:
       name: "Height"
     height_min:
-      name: "Height Min"
+      name: "Current Height Limit Min"
     height_max:
-      name: "Height Max"
+      name: "Current Height Limit Max"
     height_pct:
       name: "Height Percent"
     position1:
@@ -49,6 +51,14 @@ jiecang_desk_controller:
       name: "Position 3"
     position4:
       name: "Position 4"
+    physical_limit_min:
+      name: "Physical Height Limit Min"
+    physical_limit_max:
+      name: "Physical Height Limit Max"
+    custom_limit_min:
+      name: "Custom Height Limit Min"
+    custom_limit_max:
+      name: "Custom Height Limit Max"
   buttons:
     move_up:
       name: "Move up"
@@ -61,24 +71,33 @@ jiecang_desk_controller:
     step_down:
       name: "Step down"
     position1:
-      name: "Position 1"
+      name: "Go to Position 1"
     position2:
-      name: "Position 2"
+      name: "Go to Position 2"
     position3:
-      name: "Position 3"
+      name: "Go to Position 3"
     position4:
-      name: "Position 4"
+      name: "Go to Position 4"
     save_position:
       name: "Save Position"
-    move_up:
-      name: "Move up"
-    move_down:
-      name: "Move down"
+    fetch_settings:
+      name: "Fetch Desk Settings"
   numbers:
     height:
-      name: "Height"
+      name: "Move to Height"
     height_pct:
       name: "Height Percent"
+
+button:
+  - platform: template
+    name: "Request Settings"
+    on_press:
+      then:
+        - lambda: 'ESP_LOGI("desk", "Requesting physical limits..."); id(my_desk).request_physical_limits();'
+        - delay: .5s
+        - lambda: 'ESP_LOGI("desk", "Requesting limit flags..."); id(my_desk).request_limits();'
+        - delay: .5s
+        - lambda: 'ESP_LOGI("desk", "Requesting settings..."); id(my_desk).request_settings();'
 
 ## lambda usage
 # button:

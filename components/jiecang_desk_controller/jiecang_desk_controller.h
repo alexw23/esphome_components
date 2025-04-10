@@ -2,6 +2,7 @@
 
 #include <future>
 #include "esphome/core/component.h"
+#include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/button/button.h"
 #include "esphome/components/uart/uart.h"
@@ -31,10 +32,12 @@ namespace esphome {
                 float current_height = 0;
                 float limit_min = 0;
                 float limit_max = 0;
-                float physical_min = 0;
-                float physical_max = 0;
+                float physical_min = NAN;
+                float physical_max = NAN;
 
                 bool save_position_mode = false;
+
+                uint32_t last_message_time_ = 0;
 
                 float byte2float(int high, int low);
                 bool bufferMessage(int data, unsigned int *buffer, int len);
@@ -48,15 +51,24 @@ namespace esphome {
                 void set_sensor_height_max(sensor::Sensor *sensor) { this->height_max = sensor; }
                 void set_sensor_height_pct(sensor::Sensor *sensor) { this->height_pct = sensor; }
 
+                void set_sensor_physical_limit_min(sensor::Sensor *sensor) { this->sensor_physical_min = sensor; }
+                void set_sensor_physical_limit_max(sensor::Sensor *sensor) { this->sensor_physical_max = sensor; }
+
+                void set_sensor_custom_limit_min(sensor::Sensor *sensor) { this->sensor_custom_limit_min = sensor; }
+                void set_sensor_custom_limit_max(sensor::Sensor *sensor) { this->sensor_custom_limit_max = sensor; }
+                void set_sensor_has_custom_limit(binary_sensor::BinarySensor *sensor) { this->has_custom_limit = sensor; }
+
                 void set_sensor_position1(sensor::Sensor *sensor) { this->position1 = sensor; }
                 void set_sensor_position2(sensor::Sensor *sensor) { this->position2 = sensor; }
                 void set_sensor_position3(sensor::Sensor *sensor) { this->position3 = sensor; }
                 void set_sensor_position4(sensor::Sensor *sensor) { this->position4 = sensor; }
 
                 void send_simple_command(unsigned char cmd);
+                void write_command(unsigned char cmd);
                 void add_button(button::Button *btn, int action);
                 void add_number(JiecangDeskNumber *number, int type);
 
+                void publish_active_limits();
                 void step_up();
                 void step_down();
                 void stop();
@@ -82,6 +94,13 @@ namespace esphome {
                 Sensor *position2{nullptr};
                 Sensor *position3{nullptr};
                 Sensor *position4{nullptr};
+
+                Sensor *sensor_physical_min{nullptr};
+                Sensor *sensor_physical_max{nullptr};
+
+                Sensor *sensor_custom_limit_min{nullptr};
+                Sensor *sensor_custom_limit_max{nullptr};
+                binary_sensor::BinarySensor *has_custom_limit{nullptr};
 
                 JiecangDeskNumber *number_height{nullptr};
                 JiecangDeskNumber *number_height_pct{nullptr};

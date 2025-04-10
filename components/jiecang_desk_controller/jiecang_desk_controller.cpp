@@ -49,15 +49,29 @@ namespace esphome {
         }
 
         void JiecangDeskController::handleMessage(unsigned int *message) {
-            // ESP_LOGV("jiecang_desk_controller", "message %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X", message[0], message[1], message[2], message[3], message[4], message[5], message[6], message[7], message[8], message[9]);
+            this->last_message_time_ = millis();
+
+            ESP_LOGV("jiecang_desk_controller", "message %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X", message[0], message[1], message[2], message[3], message[4], message[5], message[6], message[7], message[8], message[9]);
+
+            float new_height = 0.0f;
 
             switch (message[0]) {
                 case 0x01:
                     ESP_LOGV("jiecang_desk_controller", "height 0x%0X%0X", message[2], message[3]);
-                    float new_height;
                     new_height = byte2float(message[2], message[3]);
-                    if (new_height == current_height) return;
+
+                    if (this->limit_max > this->limit_min) {
+                        if (new_height < this->limit_min || new_height > this->limit_max) {
+                            ESP_LOGW(TAG, "Suspicious height reading %.1f cm outside limits (%.1f - %.1f)", new_height, this->limit_min, this->limit_max);
+                            return;
+                        }
+                    }
+
+                    if (new_height == current_height)
+                        return;
+
                     current_height = new_height;
+
                     if (height != nullptr) height->publish_state(current_height);
                     if (number_height != nullptr) number_height->publish_state(current_height);
 
@@ -67,40 +81,89 @@ namespace esphome {
                         number_height_pct->publish_state(roundf((current_height - limit_min) / (limit_max - limit_min) * 1000)/10);
                     break;
 
-                case 0x20:
-                    ESP_LOGV("jiecang_desk_controller", "limits 0x%0X  max %i min %i", message[2], (message[2] & 1), (message[2]>>4));
+                case 0x20: {
+                    uint8_t limit_flags = message[2];
+                    bool has_max_limit = (limit_flags & 0x01) != 0;
+                    bool has_min_limit = (limit_flags >> 4) != 0;
+                
+                    ESP_LOGV(TAG, "limits byte: 0x%02X -> max %s / min %s",
+                                limit_flags,
+                                has_max_limit ? "LIMITED" : "PHYSICAL",
+                                has_min_limit ? "LIMITED" : "PHYSICAL");
+                
+                    // Clear custom limits if not set
+                    if (!has_max_limit && sensor_custom_limit_max != nullptr)
+                        sensor_custom_limit_max->publish_state(NAN);
+                    if (!has_min_limit && sensor_custom_limit_min != nullptr)
+                        sensor_custom_limit_min->publish_state(NAN);
+                
+                    // Update custom limit presence flag
+                    if (this->has_custom_limit != nullptr) {
+                        bool has_any_custom_limit = has_max_limit || has_min_limit;
+                        this->has_custom_limit->publish_state(has_any_custom_limit);
+                        ESP_LOGI("jiecang", "Custom height limit: %s", has_any_custom_limit ? "ENABLED" : "DISABLED");
+                    }
+                
+                    break;
+                }
 
-                    if ((message[2] & 1) == 0) { // low nibble 0 -> no max limit, use physical_max
-                        limit_max = physical_max;
+                case 0x07: {
+                    float max_val = byte2float(message[2], message[3]);
+                    float min_val = byte2float(message[4], message[5]);
+                
+                    ESP_LOGV(TAG, "physical limits 0x%02X%02X 0x%02X%02X", message[2], message[3], message[4], message[5]);
+                
+                    this->physical_max = max_val;
+                    this->physical_min = min_val;
+                
+                    if (this->sensor_physical_max != nullptr)
+                        this->sensor_physical_max->publish_state(max_val);
+                    if (this->sensor_physical_min != nullptr)
+                        this->sensor_physical_min->publish_state(min_val);
+                
+                    // If custom limits aren't active, use these as current limits
+                    if (this->has_custom_limit == nullptr || !this->has_custom_limit->state) {
+                        limit_max = max_val;
+                        limit_min = min_val;
+                
                         if (height_max != nullptr) height_max->publish_state(limit_max);
-                        if (number_height != nullptr) number_height->set_max_value(limit_max);
-                    }
-                    if ((message[2]>>4) == 0) { // high nibble 0 -> no min limit, use physical_min
-                        limit_min = physical_min;
                         if (height_min != nullptr) height_min->publish_state(limit_min);
-                        if (number_height != nullptr) number_height->set_min_value(limit_min);
+                        if (number_height != nullptr) {
+                            number_height->set_min_value(limit_min);
+                            number_height->set_max_value(limit_max);
+                        }
                     }
+                
                     break;
+                }
 
-                case 0x07:
-                    ESP_LOGV("jiecang_desk_controller", "physical limits 0x%02X%02X 0x%02X%02X", message[2], message[3], message[4], message[5]);
-                    physical_max = byte2float(message[2], message[3]);
-                    physical_min = byte2float(message[4], message[5]);
-                    break;
-
-                case 0x21:
+                case 0x21: {
+                    ESP_LOGI(TAG, "Received limit_max from controller: %.1f", byte2float(message[2], message[3]));
                     ESP_LOGV("jiecang_desk_controller", "height_max 0x%02X%02X", message[2], message[3]);
                     limit_max = byte2float(message[2], message[3]);
+                
                     if (height_max != nullptr) height_max->publish_state(limit_max);
                     if (number_height != nullptr) number_height->set_max_value(limit_max);
-                    break;
+                    if (sensor_custom_limit_max != nullptr) sensor_custom_limit_max->publish_state(limit_max);
 
-                case 0x22:
+                    publish_active_limits();
+                
+                    break;
+                }
+
+                case 0x22: {
+                    ESP_LOGI(TAG, "Received limit_min from controller: %.1f", byte2float(message[2], message[3]));
                     ESP_LOGV("jiecang_desk_controller", "height_min 0x%02X%02X", message[2], message[3]);
                     limit_min = byte2float(message[2], message[3]);
+                
                     if (height_min != nullptr) height_min->publish_state(limit_min);
                     if (number_height != nullptr) number_height->set_min_value(limit_min);
+                    if (sensor_custom_limit_min != nullptr) sensor_custom_limit_min->publish_state(limit_min);
+
+                    publish_active_limits();
+                
                     break;
+                }
 
                 case 0x25:
                     ESP_LOGV("jiecang_desk_controller", "position1 0x%02X%02X", message[2], message[3]);
@@ -127,6 +190,11 @@ namespace esphome {
             }
         }
 
+        void JiecangDeskController::publish_active_limits() {
+            if (height_min != nullptr) height_min->publish_state(limit_min);
+            if (height_max != nullptr) height_max->publish_state(limit_max);
+        }
+
         void JiecangDeskController::update() {
             const int max_length = 10;
             static unsigned int buffer[max_length];
@@ -138,6 +206,20 @@ namespace esphome {
         }
 
         void JiecangDeskController::send_simple_command(unsigned char cmd) {
+            uint32_t now = millis();
+            uint32_t time_since_last_message = now - this->last_message_time_;
+            
+            // If more than 5 seconds passed since last message, assume desk is asleep
+            if (time_since_last_message > 4500) {
+                ESP_LOGD(TAG, "Desk might be asleep (last message %ums ago). Sending wake-up (stop) command.", time_since_last_message);
+                write_command(0x2B);  // send STOP to wake up
+                delay(100);  // brief delay to allow the desk to wake up
+            }
+            
+            write_command(cmd);
+        }
+
+        void JiecangDeskController::write_command(unsigned char cmd) {
             write_array({ 0xF1, 0xF1, cmd, 0x00, cmd, 0x7E });
         }
 
